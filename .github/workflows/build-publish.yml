@@ -1,4 +1,4 @@
-name: Build and Publish Distroless checkm2
+name: Build and Publish checkm2
 
 on:
   push:

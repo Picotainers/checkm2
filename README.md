@@ -1,5 +1,5 @@
 # checkm2
-Small, distroless-when-possible container for `checkm2`.
+Small compatibility-focused container for `checkm2`.
 
 ## how to use
 ```bash
