@@ -1,7 +1,18 @@
 # checkm2
-Small compatibility-focused container for `checkm2`.
+Container image for `checkm2`.
 
-## how to use
+## Quick Usage
+
 ```bash
-docker run --rm -v "$(pwd):/data" picotainers/checkm2:latest --help
+# Pull the image
+docker pull docker.io/picotainers/checkm2:latest
+
+# Run the tool
+docker run --rm docker.io/picotainers/checkm2:latest checkm2 --help
+```
+
+## Usage with mounted data
+
+```bash
+docker run --rm -v "$(pwd):/data" docker.io/picotainers/checkm2:latest checkm2 --help
 ```

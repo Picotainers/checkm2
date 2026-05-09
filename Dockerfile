@@ -1,34 +1,39 @@
 # syntax=docker/dockerfile:1
-# Compatibility-first template for checkm2.
-# Installs package from Bioconda and copies the full conda runtime to avoid missing libs/interpreters.
 
-FROM mambaorg/micromamba:2.0.5-debian12-slim AS builder
+FROM python:3.11-slim-bookworm AS builder
 
-RUN micromamba install -y -n base -c conda-forge -c bioconda \
-    checkm2 \
-    && micromamba clean --all --yes
+ARG CHECKM2_TAG=1.1.0
 
-# Resolve a runnable command for this package.
-# Prefer exact match, then underscore variant, then prefix match.
-RUN set -eux; \
-    BIN=""; \
-    if [ -x "/opt/conda/bin/checkm2" ]; then BIN="/opt/conda/bin/checkm2"; fi; \
-    if [ -z "$BIN" ]; then CAND="/opt/conda/bin/$(echo checkm2 | tr '-' '_')"; [ -x "$CAND" ] && BIN="$CAND" || true; fi; \
-    if [ -z "$BIN" ]; then BIN="$(find /opt/conda/bin -maxdepth 1 -type f -perm -111 -name 'checkm2*' | head -n1 || true)"; fi; \
-    test -n "$BIN"; \
-    printf '%s\n' "$BIN" > /tmp/tool-entry-path
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-FROM mambaorg/micromamba:2.0.5-debian12-slim
+WORKDIR /src
+RUN git clone --depth 1 --branch "${CHECKM2_TAG}" https://github.com/chklovski/checkm2.git
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && pip wheel --no-cache-dir --wheel-dir /tmp/wheels /src/checkm2
 
-COPY --from=builder /opt/conda /opt/conda
-COPY --from=builder /tmp/tool-entry-path /tmp/tool-entry-path
+FROM python:3.11-slim-bookworm
 
-USER root
-ENV PATH="/opt/conda/bin:${PATH}"
-ENV LD_LIBRARY_PATH="/opt/conda/lib:/opt/conda/lib64"
-RUN set -eux; \
-    BIN="$(cat /tmp/tool-entry-path)"; \
-    printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$BIN" > /usr/local/bin/checkm2
-RUN chmod +x /usr/local/bin/checkm2 && rm -f /tmp/tool-entry-path
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends hmmer prodigal diamond-aligner \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /tmp/wheels /tmp/wheels
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir /tmp/wheels/* \
+    && rm -rf /tmp/wheels
+
+RUN printf '%s\n' \
+    '#!/bin/sh' \
+    'set -eu' \
+    'if [ "${1:-}" = "checkm2" ]; then' \
+    '  shift' \
+    'fi' \
+    'exec checkm2 "$@"' \
+    > /usr/local/bin/run-checkm2 \
+    && chmod +x /usr/local/bin/run-checkm2
+
 WORKDIR /data
-ENTRYPOINT ["/usr/local/bin/checkm2"]
+ENTRYPOINT ["/usr/local/bin/run-checkm2"]
+CMD ["--help"]
